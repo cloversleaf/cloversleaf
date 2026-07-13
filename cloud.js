@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const ua = require('./ua');
+const { log: defaultLog } = require('./logger');
 puppeteer.use(StealthPlugin());
 
 class cloverwaf {
@@ -11,6 +12,7 @@ class cloverwaf {
         this.proxy = opts.proxy || null;
         this.browser = null;
         this.sessions = new Map();
+        this.log = opts.log || defaultLog;
     }
 
     async init() {
@@ -33,6 +35,13 @@ class cloverwaf {
             args.push(`--proxy-server=${this.proxy}`);
         }
 
+        this.log.info('browser_launch', {
+            headless: this.headless,
+            proxy: this.proxy || null,
+            chromePath: process.env.CHROME_PATH || 'bundled',
+        });
+
+        const t0 = Date.now();
         this.browser = await puppeteer.launch({
             headless: this.headless,
             executablePath: process.env.CHROME_PATH || undefined,
@@ -40,6 +49,7 @@ class cloverwaf {
             ignoreDefaultArgs: ['--enable-automation'],
             defaultViewport: null,
         });
+        this.log.info('browser_launched', { ms: Date.now() - t0 });
         return this;
     }
 
@@ -170,21 +180,35 @@ class cloverwaf {
     }
 
     async bypass(url, opts = {}) {
-        const { page, session } = await this.newPage(opts);
+        const reqId = opts.reqId || null;
+        const slog = this.log.child({ reqId, url });
+        const { page, session, profile } = await this.newPage(opts);
         const start = Date.now();
         let lastError = 'Max retries';
 
+        slog.info('bypass_start', {
+            session,
+            uaBrowser: profile?.meta?.browser,
+            uaDevice: profile?.meta?.device,
+            retryMax: this.retry,
+        });
+
         for (let i = 1; i <= this.retry; i++) {
             try {
+                slog.debug('goto', { attempt: i });
                 await page.goto(url, {
                     waitUntil: opts.waitUntil || 'networkidle2',
                     timeout: opts.timeout || this.timeout,
                     referer: opts.referer || undefined,
                 });
 
+                slog.debug('solve_start', { attempt: i });
                 await this.solve(page, opts.timeout || this.timeout);
 
-                if (await this.isClean(page)) {
+                const clean = await this.isClean(page);
+                slog.debug('clean_check', { attempt: i, clean, title: await page.title().catch(() => '') });
+
+                if (clean) {
                     const cookies = await page.cookies();
                     const html = await page.content();
                     const elapsed = ((Date.now() - start) / 1000).toFixed(2);
@@ -200,12 +224,21 @@ class cloverwaf {
                     };
 
                     this.sessions.set(session, { ...this.sessions.get(session), ...data });
+                    slog.info('bypass_success', {
+                        session,
+                        attempt: i,
+                        time: data.time,
+                        cookieCount: cookies.length,
+                        htmlBytes: html.length,
+                    });
                     return data;
                 }
 
                 lastError = 'Challenge still present after solve';
+                slog.warn('still_challenged', { attempt: i });
             } catch (e) {
                 lastError = e.message;
+                slog.warn('attempt_error', { attempt: i, error: e.message });
                 if (i === this.retry) break;
                 await this.sleep(2000 * i);
             }
@@ -213,6 +246,7 @@ class cloverwaf {
 
         await page.close().catch(() => {});
         this.sessions.delete(session);
+        slog.error('bypass_failed', { session, error: lastError, ms: Date.now() - start });
         return { ok: false, error: lastError, session };
     }
 
@@ -354,12 +388,14 @@ class cloverwaf {
     }
 
     async close() {
+        this.log.info('browser_closing', { sessions: this.sessions.size });
         for (const [, data] of this.sessions) {
             if (data.page) await data.page.close().catch(() => {});
         }
         this.sessions.clear();
         if (this.browser) await this.browser.close().catch(() => {});
         this.browser = null;
+        this.log.info('browser_closed');
     }
 }
 

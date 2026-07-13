@@ -69,11 +69,23 @@ await engine.close();
 | Variable | Default | Notes |
 |----------|---------|--------|
 | `PORT` | `3000` | API port |
+| `HOST` | `0.0.0.0` | bind address |
 | `HEADLESS` | `new` | set `false` to show browser |
 | `TIMEOUT` | `120000` | ms |
 | `RETRY` | `5` | attempts |
 | `PROXY` | — | e.g. `http://host:port` |
 | `CHROME_PATH` | — | system Chrome/Chromium |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
+
+Logs are **JSON lines** (Railway-friendly): `boot_*`, `http`, `bypass_*`, `browser_*`.
+
+## Railway
+
+```bash
+railway up
+```
+
+Uses `Dockerfile` (Puppeteer + Chrome). Set `PORT` automatically; optional `PROXY`, `LOG_LEVEL=info`.
 
 ## UA
 
