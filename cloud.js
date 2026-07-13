@@ -195,18 +195,41 @@ class cloverwaf {
 
         for (let i = 1; i <= this.retry; i++) {
             try {
-                slog.debug('goto', { attempt: i });
-                await page.goto(url, {
-                    waitUntil: opts.waitUntil || 'networkidle2',
-                    timeout: opts.timeout || this.timeout,
-                    referer: opts.referer || undefined,
-                });
+                // networkidle2 hangs on chatty sites (e.g. cloudflare.com). Prefer load/domcontentloaded.
+                const waitUntil = opts.waitUntil || 'domcontentloaded';
+                slog.info('goto', { attempt: i, waitUntil });
+                try {
+                    await page.goto(url, {
+                        waitUntil,
+                        timeout: opts.timeout || this.timeout,
+                        referer: opts.referer || undefined,
+                    });
+                } catch (navErr) {
+                    // Still try to use the page if something rendered
+                    const partial = await page.content().catch(() => '');
+                    slog.warn('goto_error', {
+                        attempt: i,
+                        error: navErr.message,
+                        partialHtml: partial.length,
+                        pageUrl: page.url(),
+                    });
+                    if (!partial || partial.length < 200) throw navErr;
+                }
 
-                slog.debug('solve_start', { attempt: i });
+                slog.info('solve_start', {
+                    attempt: i,
+                    pageUrl: page.url(),
+                    title: await page.title().catch(() => ''),
+                });
                 await this.solve(page, opts.timeout || this.timeout);
 
                 const clean = await this.isClean(page);
-                slog.debug('clean_check', { attempt: i, clean, title: await page.title().catch(() => '') });
+                slog.info('clean_check', {
+                    attempt: i,
+                    clean,
+                    title: await page.title().catch(() => ''),
+                    pageUrl: page.url(),
+                });
 
                 if (clean) {
                     const cookies = await page.cookies();
