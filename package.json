@@ -1,0 +1,42 @@
+{
+  "name": "cloversleaf",
+  "version": "2.0.1",
+  "description": "cloverwaf — browser-grade challenge engine (Cloudflare and common WAF interstitials) by atulhacks",
+  "main": "cloud.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node -e \"const C=require('./cloud'); const u=require('./ua'); console.log(typeof C==='function' && typeof u.generate==='function' ? 'ok' : 'fail')\""
+  },
+  "keywords": [
+    "cloversleaf",
+    "cloverwaf",
+    "cloudflare",
+    "bypass",
+    "turnstile",
+    "waf",
+    "puppeteer",
+    "stealth",
+    "anti-bot",
+    "user-agent",
+    "atulhacks"
+  ],
+  "author": "cloverwaf",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloversleaf/cloversleaf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cloversleaf/cloversleaf/issues"
+  },
+  "homepage": "https://github.com/cloversleaf/cloversleaf#readme"
+}
